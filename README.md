@@ -12,6 +12,18 @@ The first experiment is language-conditioned cube pick-and-place:
 
 [Training & inference guide](SMOLVLA.md) · [中文操作速查](操作速查.md) · [Results & next experiments](docs/PROJECT_NOTES.md)
 
+## Real-Robot Demonstrations
+
+[![Piper SmolVLA red-cube pick-and-place excerpt](media/piper-smolvla-demo-preview.gif)](https://zhaoyufei.cn/projects/piper-smolvla-demo.mp4)
+
+**Selected full demonstration, 48 seconds:** [Play video](https://zhaoyufei.cn/projects/piper-smolvla-demo.mp4) · [MP4 in this repository](media/piper-smolvla-demo.mp4)
+
+The selected recording shows the Piper grasping the red cube and placing it in the black box. The GIF is a normal-speed excerpt from seconds 24-46, not the complete trial. The full MP4 preserves the original 48-second duration. This is a selected demonstration, not a measured success rate; the colour-selection and motion-jitter limitations above still apply.
+
+[Additional trial, 27 seconds](https://zhaoyufei.cn/projects/piper-smolvla-additional-trial.mp4) · [Additional MP4 in this repository](media/piper-smolvla-additional-trial.mp4) · [Personal project page](https://zhaoyufei.cn/#/projects)
+
+Public video copies are silent, normal-speed recordings. Source weights and demonstration datasets remain outside Git; only these presentation videos, their poster and the preview GIF are added here.
+
 ## What is in this project?
 
 - SpaceMouse Cartesian teleoperation, inverse kinematics and joint-position control.
@@ -112,7 +124,7 @@ SMOLVLA.md               Collection, conversion, training and inference commands
 - Evaluate target-colour selection with matched red/white instructions and swapped object positions.
 - Trace and reduce motion jitter while preserving task completion.
 - Validate stop, restart, stale-feedback and automatic return-home behavior.
-- Record repeatable trials, failure types and a demonstration video for the project page.
+- Record repeatable trials and failure types beyond the selected project-page demonstrations.
 
 ## Credits
 
