@@ -1,0 +1,54 @@
+# Python and editor state
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ROS build products
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Local audits, recordings, model weights and caches
+/reports/
+/data/
+/piper_data/
+/policies/
+/checkpoints/
+/outputs/
+/runs/
+/hf_cache/
+episode_*/
+*.trace.jsonl
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.mp4
+*.avi
+*.bag
+*.db3
+*.mcap
+*.log
+*.tar
+*.tar.gz
+*.zip
+
+# Machine-local settings and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+.codex/
+.agents/
+.claude/

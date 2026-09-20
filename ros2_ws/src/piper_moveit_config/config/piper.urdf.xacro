@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="piper">
+  <!-- This arm carries a Pika gripper. For the standard AgileX gripper, include
+       piper_description.urdf instead and set finger_sign back to 1.0 in the launch file
+       (the Pika finger joints run the opposite way). -->
+  <!-- No ros2_control tag: trajectories are executed by piper_bridge's action servers. -->
+  <xacro:include filename="$(find piper_description)/urdf/piper_pika_gripper.urdf"/>
+</robot>
