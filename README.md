@@ -20,7 +20,7 @@ The first experiment is language-conditioned cube pick-and-place:
 
 The selected recording shows the Piper grasping the red cube and placing it in the black box. The GIF is a normal-speed excerpt from seconds 24-46, not the complete trial. The full MP4 preserves the original 48-second duration. This is a selected demonstration, not a measured success rate; the colour-selection and motion-jitter limitations above still apply.
 
-[Additional trial, 27 seconds](https://zhaoyufei.cn/projects/piper-smolvla-additional-trial.mp4) · [Additional MP4 in this repository](media/piper-smolvla-additional-trial.mp4) · [Personal project page](https://zhaoyufei.cn/#/projects)
+[Personal project page](https://zhaoyufei.cn/#/projects)
 
 Public video copies are silent, normal-speed recordings. Source weights and demonstration datasets remain outside Git; only these presentation videos, their poster and the preview GIF are added here.
 
