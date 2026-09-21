@@ -10,6 +10,7 @@ import sys
 import termios
 import time
 import tty
+from pathlib import Path
 
 import numpy as np
 from piper_sdk import C_PiperInterface_V2
@@ -172,6 +173,30 @@ def driver_info(piper):
     return info
 
 
+def health(piper):
+    """Arm status code, per-driver enable flag and raised fault bits, compact enough to trace.
+
+    A driver that trips drops its own torque while the arm keeps talking: on 2026-09-21 J2
+    went limp mid-run and fell 33 deg, and nothing recorded why. This is what would have.
+    """
+    info = driver_info(piper)
+    return {"arm": int(arm_status(piper).arm_status),
+            "on": [d["enabled"] for d in info],
+            "faults": {str(d["joint"]): d["faults"] for d in info if d["faults"]}}
+
+
+def health_problem(record):
+    """Human-readable problem in a health() record, or None."""
+    off = [i + 1 for i, on in enumerate(record["on"]) if not on]
+    parts = []
+    if record["arm"]:
+        parts.append(f"arm status 0x{record['arm']:02X} ({FAULT_STATUSES.get(record['arm'], 'unknown')})")
+    if off:
+        parts.append("driver disabled on " + " ".join(f"J{j}" for j in off))
+    parts += [f"J{j}: {', '.join(names)}" for j, names in record["faults"].items()]
+    return "; ".join(parts) or None
+
+
 def protection_levels(piper, timeout=1.0):
     """Collision protection level per joint: 0 = off, 1 = trips easiest, 8 = least sensitive."""
     t0 = time.time()
@@ -315,6 +340,18 @@ class KeyReader:
         if self._fd is not None and self._saved is not None:
             termios.tcsetattr(self._fd, termios.TCSADRAIN, self._saved)
         self._fd = None
+
+
+def open_trace(where, prefix):
+    """<prefix>_NNN.jsonl in a directory, so runs never overwrite each other; or a .jsonl path."""
+    where = Path(where).expanduser()
+    if where.suffix == ".jsonl":
+        where.parent.mkdir(parents=True, exist_ok=True)
+        return where
+    where.mkdir(parents=True, exist_ok=True)
+    width = len(prefix) + 1
+    used = [int(f.stem[width:width + 3]) for f in where.glob(f"{prefix}_[0-9][0-9][0-9].jsonl")]
+    return where / f"{prefix}_{max(used) + 1 if used else 0:03d}.jsonl"
 
 
 def min_jerk(q0, q1, duration, t):

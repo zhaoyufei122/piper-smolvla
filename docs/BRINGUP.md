@@ -158,8 +158,13 @@ t_ref_i = tau_scale_i · gain · tau_g,i(q)
 
 `tau_g(q)` comes from the URDF masses and centres of mass (`gravity_model.py`), with the
 gripper lumped into link6. It matches `pinocchio.computeGeneralizedGravity` to 1e-14 N·m.
-The joint driver multiplies MIT torque commands by 4 (piper_sdk Q&A), so the default
-`--tau-scale` is 0.25.
+The J1–J3 drivers multiply MIT torque commands by 4 and the J4–J6 drivers do not
+(measured 2026-09-21: effort / command is 4.2 on J2/J3 and 1.0 on J5), so the default
+`--tau-scale` is `0.25 0.25 0.25 1 1 1`. With 0.25 on every joint the wrist gets a quarter
+of its torque and J5 sags ~30°. The default model is the fitted Pika gripper plus a 0.42 kg
+payload (`--tool pika --payload 0.42 --payload-x 0.03 --payload-z 0.07`); the standard-gripper
+model left out most of the wrist load. Every run is traced to `~/piper_data/runs/gravity/`,
+including each driver's enable flag and fault bits.
 
 Procedure:
 
@@ -175,13 +180,20 @@ python3 gravity_compensation.py --check --target 0 30 -80 0 -40 0
 # 2) Go back to the rest pose
 python3 joint_position_ctrl.py --zero -y
 
-# 3) Free one joint first, the others hold
+# 3) Free one joint first, the others hold (keep this short -- see the warning below)
 python3 gravity_compensation.py --joints 2
 python3 gravity_compensation.py --joints 2 3
 
 # 4) All joints free
 python3 gravity_compensation.py
 ```
+
+**Held joints are held by a MIT position spring (kp 10), and that is the fragile part.**
+On 2026-09-21, `--joints 5` at the working pose (200 Hz) buzzed J2 at 1.3–2 N·m for six
+seconds; then J2 took a jolt, its driver stopped producing torque, and J2 fell 33° before the
+speed watchdog stopped the run (`gc_000.jsonl`). With every joint free the same arm was quiet
+(0.15 N·m) and no driver dropped out in 66 s. Prefer step 4, run at 100 Hz, and keep a hand
+under the arm whenever joints are being held.
 
 Stopping: press Ctrl+C and the arm holds its pose. Then press Enter to move to the rest
 pose and disable, or type `d` + Enter to disable at once (support the arm by hand). **Before

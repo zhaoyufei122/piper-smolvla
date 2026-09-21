@@ -13,10 +13,12 @@ Safety: gains ramp in over --ramp seconds, joints get a soft spring near their l
 and a joint speed above --max-vel drops into position hold. Ctrl+C holds the pose and
 offers to return to the rest pose before disabling.
 
-MIT command torque is multiplied by 4 inside the joint driver (piper_sdk Q&A), hence the
-default --tau-scale 0.25. Calibrate it per joint if the arm sinks or rises.
+MIT command torque is multiplied by 4 inside the J1-J3 drivers but not the J4-J6 ones
+(measured, see TAU_SCALE), hence the default --tau-scale 0.25 0.25 0.25 1 1 1. Calibrate it
+per joint if the arm sinks or rises.
 """
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -27,6 +29,10 @@ from gravity_model import TOOL_URDF, GravityModel
 from joint_position_ctrl import move_to
 
 MIT_T_LIMIT = 8.0            # the SDK encodes t_ref in [-8, 8]
+# MIT command per Nm. The J1-J3 drivers multiply the command by 4, the J4-J6 drivers do not:
+# measured at rest as effort / command = 4.1-4.2 on J2/J3 and 1.01-1.04 on J5 (three runs,
+# 2026-09-21). With 0.25 everywhere J5 got a quarter of its gravity torque and sagged ~30 deg.
+TAU_SCALE = [0.25, 0.25, 0.25, 1.0, 1.0, 1.0]
 KP_HOLD, KD_HOLD = 10.0, 0.8  # SDK reference gains for MIT position hold
 MODE_CMD_EVERY = 5           # re-send the MIT mode command every N cycles
 LIMIT_MARGIN = np.radians(5.0)
@@ -158,11 +164,22 @@ def run_free_drive(piper, model, args):
     gripper_width = setup_gripper(piper, args.gripper)
     q_start = pc.joint_positions(piper)
     hold_ref = q_start.copy()  # where held joints are locked; updated when a joint is re-held
+
+    trace = trace_path = None
+    if not args.no_trace:
+        trace_path = pc.open_trace(args.trace, "gc")
+        trace = trace_path.open("w")
+        trace.write(json.dumps({"meta": {
+            "script": "gravity_compensation", "started": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "args": vars(args), "q_start": [round(float(v), 5) for v in q_start],
+            "tau_scale": [float(v) for v in tau_scale], "effort_x4_j123": True}}) + "\n")
+        print(f"tracing into {trace_path}")
     rate = Rate(args.rate)
     half_ramp = max(args.ramp, 1e-3) / 2.0
     t0 = time.perf_counter()
     cycle = 0
     fast_cycles = 0
+    last_problem = None
     reason = "user"
     enter_mit(piper)
     keys = pc.KeyReader()
@@ -219,6 +236,20 @@ def run_free_drive(piper, model, args):
             if gripper_width is not None and cycle % 20 == 0:
                 pc.send_gripper(piper, gripper_width, 0.5)
             send_mit(piper, pos_ref, kp, kd, t_ref)
+            # Driver health, 10x less often than the loop: the low-speed feedback is slow anyway.
+            health = pc.health(piper) if cycle % 10 == 0 else None
+            problem = pc.health_problem(health) if health else None
+            if problem and problem != last_problem:
+                announce(f"DRIVER PROBLEM: {problem}")
+            last_problem = problem if health else last_problem
+            if trace is not None:
+                r = lambda v, d=4: [round(float(x), d) for x in v]
+                trace.write(json.dumps({
+                    "t": round(t, 4), "key": key, "free": free.tolist(), "hold": round(hold, 3),
+                    "q": r(q, 5), "qd": r(dq), "effort": r(pc.joint_efforts(piper, x4_j123=True), 3),
+                    "tau_model": r(tau), "t_ref": r(t_ref), "pos_ref": r(pos_ref, 5),
+                    "kp": r(kp, 3), "kd": r(kd, 3), "scale": r(tau_scale, 3),
+                    **({"health": health} if health else {})}) + "\n")
 
             fast_cycles = fast_cycles + 1 if np.any(np.abs(dq) > args.max_vel) else 0
             if fast_cycles >= 3:
@@ -237,6 +268,10 @@ def run_free_drive(piper, model, args):
         pass
     finally:
         keys.stop()
+        if trace is not None:
+            trace.write(json.dumps({"meta": {"stop_reason": reason}}) + "\n")
+            trace.close()
+            print(f"\ntrace written to {trace_path}")
         print(f"\ntuning now: --kd {' '.join(f'{v:.2f}' for v in kd_free)}"
               f" --tau-scale {' '.join(f'{v:.2f}' for v in tau_scale)}")
     print()
@@ -312,8 +347,9 @@ def main():
     ap.add_argument("--joints", type=int, nargs="+", default=[1, 2, 3, 4, 5, 6], choices=range(1, 7),
                     help="joints to make free (others hold)")
     ap.add_argument("--gain", type=float, default=1.0, help="global model torque multiplier")
-    ap.add_argument("--tau-scale", type=float, nargs="+", default=[0.25],
-                    help="MIT command per N*m of model torque (1 or 6 values)")
+    ap.add_argument("--tau-scale", type=float, nargs="+", default=TAU_SCALE,
+                    help="MIT command per N*m of model torque (1 or 6 values). Measured on this "
+                         "arm: J1-J3 drivers execute 4x the command, J5 1x (2026-09-21)")
     ap.add_argument("--kd", type=float, nargs="+", default=[0.3], help="free-joint damping (1 or 6 values)")
     ap.add_argument("--kp-hold", type=float, nargs="+", default=[KP_HOLD],
                     help="stiffness of held joints, 1 or 6 values (lower it if holding buzzes)")
@@ -325,15 +361,21 @@ def main():
     ap.add_argument("--k-wall", type=float, default=5.0, help="soft joint-limit spring kp")
     ap.add_argument("--ramp", type=float, default=4.0, help="gain ramp time [s]")
     ap.add_argument("--max-vel", type=float, default=3.0, help="speed watchdog [rad/s]")
-    ap.add_argument("--rate", type=float, default=200.0, help="control rate [Hz]")
+    ap.add_argument("--rate", type=float, default=100.0,
+                    help="control rate [Hz]. 100 is what has been run clean on hardware; a 200 Hz "
+                         "run with held joints buzzed J2 until its driver dropped out")
     ap.add_argument("--no-gripper", action="store_true", help="arm without the gripper")
-    ap.add_argument("--tool", choices=sorted(TOOL_URDF), default="piper",
+    ap.add_argument("--tool", choices=sorted(TOOL_URDF), default="pika",
                     help="end-effector actually fitted: piper = standard gripper, pika = Pika gripper")
-    ap.add_argument("--payload", type=float, default=0.0,
-                    help="extra mass the URDF does not know about, e.g. a camera [kg]")
-    ap.add_argument("--payload-x", type=float, default=0.0, help="payload offset along link6 x [m]")
-    ap.add_argument("--payload-z", type=float, default=0.15, help="payload offset along link6 z [m]")
+    ap.add_argument("--payload", type=float, default=0.42,
+                    help="extra mass the URDF does not know about, e.g. a camera [kg]. The default "
+                         "is the fitted Pika gripper + camera, as in TESTING.md")
+    ap.add_argument("--payload-x", type=float, default=0.03, help="payload offset along link6 x [m]")
+    ap.add_argument("--payload-z", type=float, default=0.07, help="payload offset along link6 z [m]")
     ap.add_argument("--urdf", default=None, help="URDF path; overrides --tool")
+    ap.add_argument("--trace", default="~/piper_data/runs/gravity",
+                    help="directory (auto-numbered gc_NNN.jsonl) or a .jsonl file")
+    ap.add_argument("--no-trace", action="store_true", help="do not record this run")
     ap.add_argument("-y", "--yes", action="store_true", help="do not ask for confirmation")
     args = ap.parse_args()
 

@@ -281,7 +281,7 @@ keeps a 5° margin. It is not a fault.
 Then lift the forearm by hand:
 
 - [ ] joint 2 feels roughly weightless and stays where you leave it
-- [ ] it sinks slowly → raise its scale: `--tau-scale 0.25 0.30 0.25 0.25 0.25 0.25`
+- [ ] it sinks slowly → raise its scale: `--tau-scale 0.25 0.30 0.25 1 1 1`
 - [ ] it rises on its own → lower the second value instead
 - [ ] it buzzes or oscillates → add damping: `--kd 0.5`
 - Record the value that worked for J2: ____
@@ -295,9 +295,11 @@ found. Record each joint's final scale:
 
 | | J1 | J2 | J3 | J4 | J5 | J6 |
 |---|---|---|---|---|---|---|
-| final `--tau-scale` | 0.25 | | | 0.25 | | 0.25 |
+| final `--tau-scale` | 0.25 | 0.25 | 0.25 | 1.0 | 1.0 | 1.0 |
 
-J1, J4 and J6 carry no gravity load, so they are free with damping only — nothing to tune.
+Measured 2026-09-21 on firmware S-V1.7-3: the J1–J3 drivers execute 4× the MIT torque
+command and J5 executes 1× (effort / command 4.2 and 1.0), which are now the defaults. J4 and
+J6 carry no gravity load, so their 1.0 is inferred from J5 rather than measured.
 
 ### T4.4 All joints free
 
